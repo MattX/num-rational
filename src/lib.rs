@@ -37,19 +37,19 @@ use core::str::FromStr;
 #[cfg(feature = "std")]
 use std::error::Error;
 
-#[cfg(feature = "bigint")]
-use bigint::{BigInt, BigUint, Sign};
 #[cfg(all(feature = "bigint", feature = "std"))]
 use bigint::ToBigInt;
+#[cfg(feature = "bigint")]
+use bigint::{BigInt, BigUint, Sign};
 
 use integer::Integer;
 use traits::float::FloatCore;
+#[cfg(all(feature = "bigint", feature = "std"))]
+use traits::ToPrimitive;
 use traits::{
     Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, FromPrimitive, Inv, Num, NumCast, One,
     Pow, Signed, Zero,
 };
-#[cfg(all(feature = "bigint", feature = "std"))]
-use traits::ToPrimitive;
 
 /// Represents the ratio between two numbers.
 #[derive(Copy, Clone, Debug)]
@@ -1447,8 +1447,14 @@ impl<T: Clone + Integer + Signed + ToPrimitive + ToBigInt> Ratio<T> {
         // be used as the mantissa of the resulting float, and the remaining two are for rounding.
         // There's an error of up to 1 on the number of resulting bits, so we may get either 55 or
         // 56 bits.
-        let mut numer = numer.to_bigint()?;
-        let mut denom = denom.to_bigint()?;
+        let numer = numer.to_bigint();
+        let denom = denom.to_bigint();
+        if numer.is_none() || denom.is_none() {
+            return None;
+        }
+
+        let mut numer = numer.unwrap();
+        let mut denom = denom.unwrap();
         let diff = numer.bits() as i64 - denom.bits() as i64;
 
         // Filter out overflows and underflows.
@@ -1510,10 +1516,10 @@ fn hash<T: Hash>(x: &T) -> u64 {
 
 #[cfg(test)]
 mod test {
-    #[cfg(feature = "bigint")]
-    use super::BigRational;
     #[cfg(all(feature = "bigint", feature = "std"))]
     use super::BigInt;
+    #[cfg(feature = "bigint")]
+    use super::BigRational;
     use super::{Ratio, Rational, Rational64};
 
     use core::f64;
@@ -2548,10 +2554,7 @@ mod test {
             411522630329218100000000000000000000000000000f64
         );
         assert_eq!(
-            BigRational::new(
-                1.into(),
-                BigInt::one() << 1050,
-            )
+            BigRational::new(1.into(), BigInt::one() << 1050,)
                 .to_f64()
                 .unwrap(),
             0f64
