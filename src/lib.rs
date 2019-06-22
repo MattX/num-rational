@@ -39,14 +39,17 @@ use std::error::Error;
 
 #[cfg(feature = "bigint")]
 use bigint::{BigInt, BigUint, Sign};
-
+#[cfg(all(feature = "bigint", feature = "std"))]
 use bigint::ToBigInt;
+
 use integer::Integer;
 use traits::float::FloatCore;
 use traits::{
     Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, FromPrimitive, Inv, Num, NumCast, One,
-    Pow, Signed, ToPrimitive, Zero,
+    Pow, Signed, Zero,
 };
+#[cfg(all(feature = "bigint", feature = "std"))]
+use traits::ToPrimitive;
 
 /// Represents the ratio between two numbers.
 #[derive(Copy, Clone, Debug)]
@@ -1386,6 +1389,7 @@ where
     Some(Ratio::new(n1, d1))
 }
 
+#[cfg(all(feature = "bigint", feature = "std"))]
 impl<T: Clone + Integer + Signed + ToPrimitive + ToBigInt> Ratio<T> {
     /// Converts the ratio to an `f64`.
     ///
@@ -1400,17 +1404,12 @@ impl<T: Clone + Integer + Signed + ToPrimitive + ToBigInt> Ratio<T> {
         assert_eq!(
             std::f64::RADIX,
             2,
-            "only floating point implementations with radix 2 are currently supported"
-        );
-        assert!(
-            std::mem::size_of::<isize>() >= 4,
-            "platforms 16 bits and under are not supported"
+            "only floating point implementations with radix 2 are supported"
         );
 
-        // The following casts all work on 32-bit+ platforms, but may overflow on 16-bit ones.
-        const F64_MAX_EXP: isize = std::f64::MAX_EXP as isize;
-        const F64_MIN_EXP: isize = std::f64::MIN_EXP as isize;
-        const F64_MANTISSA_DIGITS: isize = std::f64::MANTISSA_DIGITS as isize;
+        const F64_MAX_EXP: i64 = std::f64::MAX_EXP as i64;
+        const F64_MIN_EXP: i64 = std::f64::MIN_EXP as i64;
+        const F64_MANTISSA_DIGITS: i64 = std::f64::MANTISSA_DIGITS as i64;
 
         // Upper bound to the range of exactly-representable ints in an f64.
         const MAX_EXACT_INT: u64 = 1u64 << std::f64::MANTISSA_DIGITS;
@@ -1449,8 +1448,8 @@ impl<T: Clone + Integer + Signed + ToPrimitive + ToBigInt> Ratio<T> {
         // There's an error of up to 1 on the number of resulting bits, so we may get either 55 or
         // 56 bits.
         let mut numer = numer.to_bigint()?;
-        let denom = denom.to_bigint()?;
-        let diff = numer.bits() as isize - denom.bits() as isize;
+        let mut denom = denom.to_bigint()?;
+        let diff = numer.bits() as i64 - denom.bits() as i64;
 
         // Filter out overflows and underflows.
         if diff > F64_MAX_EXP {
@@ -1465,7 +1464,7 @@ impl<T: Clone + Integer + Signed + ToPrimitive + ToBigInt> Ratio<T> {
         let shift = std::cmp::max(diff, F64_MIN_EXP) - F64_MANTISSA_DIGITS - 2;
 
         if shift >= 0 {
-            numer >>= shift as usize
+            denom <<= shift as usize
         } else {
             numer <<= -shift as usize
         };
@@ -1475,10 +1474,11 @@ impl<T: Clone + Integer + Signed + ToPrimitive + ToBigInt> Ratio<T> {
         // This is guaranteed to fit since we've set up quotient to be at most 56 bits.
         let mut quotient = quotient.to_u64().unwrap();
         let n_rounding_bits = {
-            let quotient_bits = 64 - quotient.leading_zeros() as isize;
-            let subnormal_bits = F64_MIN_EXP - shift;
+            let quotient_bits = 64 - quotient.leading_zeros() as i64;
+            let subnormal_bits = F64_MIN_EXP - shift as i64;
             std::cmp::max(quotient_bits, subnormal_bits) - F64_MANTISSA_DIGITS
         };
+        debug_assert!(n_rounding_bits == 2 || n_rounding_bits == 3);
         let rounding_bit_mask = (1u64 << n_rounding_bits) - 1;
 
         // Round to 53 bits with round-to-even. For rounding, we need to take into account both
@@ -1512,7 +1512,9 @@ fn hash<T: Hash>(x: &T) -> u64 {
 mod test {
     #[cfg(feature = "bigint")]
     use super::BigRational;
-    use super::{Ratio, Rational, Rational64, BigInt};
+    #[cfg(all(feature = "bigint", feature = "std"))]
+    use super::BigInt;
+    use super::{Ratio, Rational, Rational64};
 
     use core::f64;
     use core::i32;
@@ -2505,6 +2507,7 @@ mod test {
     }
 
     #[test]
+    #[cfg(all(feature = "bigint", feature = "std"))]
     fn test_ratio_to_f64() {
         assert_eq!(0.5f64, Rational64::new(1, 2).to_f64().unwrap());
         assert_eq!(-0.5f64, Rational64::new(1, -2).to_f64().unwrap());
