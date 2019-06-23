@@ -1407,10 +1407,6 @@ impl<T: Clone + Integer + Signed + ToPrimitive + ToBigInt> Ratio<T> {
             "only floating point implementations with radix 2 are supported"
         );
 
-        const F64_MAX_EXP: i64 = std::f64::MAX_EXP as i64;
-        const F64_MIN_EXP: i64 = std::f64::MIN_EXP as i64;
-        const F64_MANTISSA_DIGITS: i64 = std::f64::MANTISSA_DIGITS as i64;
-
         // Upper bound to the range of exactly-representable ints in an f64.
         const MAX_EXACT_INT: u64 = 1u64 << std::f64::MANTISSA_DIGITS;
 
@@ -1455,20 +1451,32 @@ impl<T: Clone + Integer + Signed + ToPrimitive + ToBigInt> Ratio<T> {
 
         let mut numer = numer.unwrap();
         let mut denom = denom.unwrap();
-        let diff = numer.bits() as i64 - denom.bits() as i64;
+        let (is_diff_positive, absolute_diff) = match numer.bits().checked_sub(denom.bits()) {
+            Some(diff) => (true, diff),
+            None => (false, denom.bits() - numer.bits()),
+        };
 
-        // Filter out overflows and underflows.
-        if diff > F64_MAX_EXP {
+        // Filter out overflows and underflows. After this step, the signed difference fits in an
+        // isize.
+        if is_diff_positive && absolute_diff > std::f64::MAX_EXP as usize {
             return Some(std::f64::INFINITY * flo_sign);
         }
-        if diff < F64_MIN_EXP - F64_MANTISSA_DIGITS - 1 {
+        if !is_diff_positive
+            && absolute_diff > -std::f64::MIN_EXP as usize + std::f64::MANTISSA_DIGITS as usize + 1
+        {
             return Some(0.0 * flo_sign);
         }
+        let diff = if is_diff_positive {
+            absolute_diff as isize
+        } else {
+            -(absolute_diff as isize)
+        };
 
         // Shift is chosen so that the quotient will have 55 or 56 bits. The exception is if the
         // quotient is going to be subnormal, in which case it may have fewer bits.
-        let shift = std::cmp::max(diff, F64_MIN_EXP) - F64_MANTISSA_DIGITS - 2;
-
+        let shift: isize = std::cmp::max(diff, std::f64::MIN_EXP as isize)
+            - std::f64::MANTISSA_DIGITS as isize
+            - 2;
         if shift >= 0 {
             denom <<= shift as usize
         } else {
@@ -1480,10 +1488,10 @@ impl<T: Clone + Integer + Signed + ToPrimitive + ToBigInt> Ratio<T> {
         // This is guaranteed to fit since we've set up quotient to be at most 56 bits.
         let mut quotient = quotient.to_u64().unwrap();
         let n_rounding_bits = {
-            let quotient_bits = 64 - quotient.leading_zeros() as i64;
-            let subnormal_bits = F64_MIN_EXP - shift as i64;
-            std::cmp::max(quotient_bits, subnormal_bits) - F64_MANTISSA_DIGITS
-        };
+            let quotient_bits = 64 - quotient.leading_zeros() as isize;
+            let subnormal_bits = std::f64::MIN_EXP as isize - shift;
+            std::cmp::max(quotient_bits, subnormal_bits) - std::f64::MANTISSA_DIGITS as isize
+        } as usize;
         debug_assert!(n_rounding_bits == 2 || n_rounding_bits == 3);
         let rounding_bit_mask = (1u64 << n_rounding_bits) - 1;
 
