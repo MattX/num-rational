@@ -1443,14 +1443,8 @@ impl<T: Clone + Integer + Signed + ToPrimitive + ToBigInt> Ratio<T> {
         // be used as the mantissa of the resulting float, and the remaining two are for rounding.
         // There's an error of up to 1 on the number of resulting bits, so we may get either 55 or
         // 56 bits.
-        let numer = numer.to_bigint();
-        let denom = denom.to_bigint();
-        if numer.is_none() || denom.is_none() {
-            return None;
-        }
-
-        let mut numer = numer.unwrap();
-        let mut denom = denom.unwrap();
+        let mut numer = otry!(numer.to_bigint());
+        let mut denom = otry!(denom.to_bigint());
         let (is_diff_positive, absolute_diff) = match numer.bits().checked_sub(denom.bits()) {
             Some(diff) => (true, diff),
             None => (false, denom.bits() - numer.bits()),
