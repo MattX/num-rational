@@ -1421,22 +1421,11 @@ impl<T: Clone + Integer + Signed + ToPrimitive + ToBigInt> Ratio<T> {
 
         // Fast track: both sides can losslessly be converted to f64s. In this case, letting the
         // FPU do the job is faster and easier. In any other case, converting to f64s may lead
-        // to an inexact result: https://stackoverflow.com/questions/56641441/
-        if numer
-            .to_u64()
-            .and_then(|n| {
-                denom
-                    .to_u64()
-                    .map(|d| n < MAX_EXACT_INT && d < MAX_EXACT_INT)
-            })
-            .unwrap_or(false)
-        {
-            return Some(
-                numer
-                    .to_f64()
-                    .and_then(|n| denom.to_f64().map(|d| n / d * flo_sign))
-                    .unwrap(),
-            );
+        // to an inexact result: https://stackoverflow.com/questions/56641441/.
+        if let (Some(n), Some(d)) = (numer.to_u64(), denom.to_u64()) {
+            if n < MAX_EXACT_INT && d < MAX_EXACT_INT {
+                return Some(numer.to_f64().unwrap() / denom.to_f64().unwrap() * flo_sign);
+            }
         }
 
         // Otherwise, the goal is to obtain a quotient with at least 55 bits. 53 of these bits will
