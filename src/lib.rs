@@ -1407,7 +1407,7 @@ impl<T: Clone + Integer + Signed + ToPrimitive + ToBigInt> Ratio<T> {
             "only floating point implementations with radix 2 are supported"
         );
 
-        // Upper bound to the range of exactly-representable ints in an f64.
+        // Inclusive upper bound to the range of exactly-representable ints in an f64.
         const MAX_EXACT_INT: u64 = 1u64 << std::f64::MANTISSA_DIGITS;
 
         let numer: T = self.numer().abs();
@@ -1423,8 +1423,8 @@ impl<T: Clone + Integer + Signed + ToPrimitive + ToBigInt> Ratio<T> {
         // FPU do the job is faster and easier. In any other case, converting to f64s may lead
         // to an inexact result: https://stackoverflow.com/questions/56641441/.
         if let (Some(n), Some(d)) = (numer.to_u64(), denom.to_u64()) {
-            if n < MAX_EXACT_INT && d < MAX_EXACT_INT {
-                return Some(numer.to_f64().unwrap() / denom.to_f64().unwrap() * flo_sign);
+            if n <= MAX_EXACT_INT && d <= MAX_EXACT_INT {
+                return Some(flo_sign * n as f64 / d as f64);
             }
         }
 
