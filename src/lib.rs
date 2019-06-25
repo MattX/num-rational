@@ -1450,9 +1450,9 @@ impl<T: Clone + Integer + Signed + ToPrimitive + ToBigInt> Ratio<T> {
             return Some(0.0 * flo_sign);
         }
         let diff = if is_diff_positive {
-            absolute_diff as isize
+            absolute_diff.to_isize().unwrap()
         } else {
-            -(absolute_diff as isize)
+            -absolute_diff.to_isize().unwrap()
         };
 
         // Shift is chosen so that the quotient will have 55 or 56 bits. The exception is if the
