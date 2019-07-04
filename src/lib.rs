@@ -30,6 +30,8 @@ extern crate num_traits as traits;
 extern crate std;
 
 use core::cmp;
+#[cfg(all(feature = "bigint", feature = "std"))]
+use core::convert::From;
 use core::fmt;
 use core::hash::{Hash, Hasher};
 use core::ops::{Add, Div, Mul, Neg, Rem, Sub};
@@ -1397,8 +1399,17 @@ impl<T: Clone + Integer + Signed + ToPrimitive + ToBigInt> Ratio<T> {
     /// returns a value, unless the conversion to BigInt for the numerator or denominator fails.
     ///
     /// ```
-    /// use num_rational::Rational64;
+    /// use num_rational::{Rational64, BigRational};
     /// assert_eq!(0.5f64, Rational64::new(1, 2).to_f64().unwrap());
+    /// assert_eq!(
+    ///     BigRational::new(
+    ///        "1234567890987654321234567890".parse().unwrap(),
+    ///        "987654321234567890987654321".parse().unwrap()
+    ///     )
+    ///     .to_f64()
+    ///     .unwrap(),
+    ///     1.2499999893125f64
+    /// );
     /// ```
     pub fn to_f64(&self) -> Option<f64> {
         assert_eq!(
@@ -1424,7 +1435,7 @@ impl<T: Clone + Integer + Signed + ToPrimitive + ToBigInt> Ratio<T> {
         // to an inexact result: https://stackoverflow.com/questions/56641441/.
         if let (Some(n), Some(d)) = (numer.to_u64(), denom.to_u64()) {
             if n <= MAX_EXACT_INT && d <= MAX_EXACT_INT {
-                return Some(flo_sign * n as f64 / d as f64);
+                return Some(flo_sign * n.to_f64().unwrap() / d.to_f64().unwrap());
             }
         }
 
@@ -2523,15 +2534,6 @@ mod test {
             Rational64::new((1 << 60) + (1 << 8), 1 << 60)
                 .to_f64()
                 .unwrap()
-        );
-        assert_eq!(
-            BigRational::new(
-                "1234567890987654321234567890".parse().unwrap(),
-                "987654321234567890987654321".parse().unwrap()
-            )
-            .to_f64()
-            .unwrap(),
-            1.2499999893125f64
         );
         assert_eq!(
             BigRational::new(
