@@ -1392,26 +1392,26 @@ where
 }
 
 #[cfg(all(feature = "bigint", feature = "std"))]
-impl<T: Clone + Integer + Signed + ToPrimitive + ToBigInt> Ratio<T> {
-    /// Converts the ratio to an `f64`.
-    ///
-    /// The value is guaranteed to be the closest `f64` approximating the ratio. This always
-    /// returns a value, unless the conversion to BigInt for the numerator or denominator fails.
-    ///
-    /// ```
-    /// use num_rational::{Rational64, BigRational};
-    /// assert_eq!(0.5f64, Rational64::new(1, 2).to_f64().unwrap());
-    /// assert_eq!(
-    ///     BigRational::new(
-    ///        "1234567890987654321234567890".parse().unwrap(),
-    ///        "987654321234567890987654321".parse().unwrap()
-    ///     )
-    ///     .to_f64()
-    ///     .unwrap(),
-    ///     1.2499999893125f64
-    /// );
-    /// ```
-    pub fn to_f64(&self) -> Option<f64> {
+impl<T: Clone + Integer + Signed + ToPrimitive + ToBigInt> ToPrimitive for Ratio<T> {
+    fn to_i64(&self) -> Option<i64> {
+        (self.numer.clone() / self.denom.clone()).to_i64()
+    }
+
+    #[cfg(has_i128)]
+    fn to_i128(&self) -> Option<i128> {
+        (self.numer.clone() / self.denom.clone()).to_i128()
+    }
+
+    fn to_u64(&self) -> Option<u64> {
+        (self.numer.clone() / self.denom.clone()).to_u64()
+    }
+
+    #[cfg(has_i128)]
+    fn to_u128(&self) -> Option<u128> {
+        (self.numer.clone() / self.denom.clone()).to_u128()
+    }
+
+    fn to_f64(&self) -> Option<f64> {
         assert_eq!(
             std::f64::RADIX,
             2,
@@ -1528,6 +1528,8 @@ mod test {
     use core::i32;
     use core::str::FromStr;
     use integer::Integer;
+    #[cfg(all(feature = "bigint", feature = "std"))]
+    use traits::ToPrimitive;
     use traits::{FromPrimitive, One, Pow, Signed, Zero};
 
     pub const _0: Rational = Ratio { numer: 0, denom: 1 };
@@ -2516,6 +2518,20 @@ mod test {
 
     #[test]
     #[cfg(all(feature = "bigint", feature = "std"))]
+    fn test_ratio_to_i64() {
+        assert_eq!(5, Rational64::new(70, 14).to_u64().unwrap());
+        assert_eq!(-3, Rational64::new(-31, 8).to_i64().unwrap());
+        assert_eq!(None, Rational64::new(-31, 8).to_u64());
+    }
+
+    #[test]
+    #[cfg(all(feature = "bigint", feature = "std", has_i128))]
+    fn test_ratio_to_i128() {
+        assert_eq!(1i128 << 70, Ratio::<i128>::new(1i128 << 77, 1i128 << 7).to_i128().unwrap());
+    }
+
+    #[test]
+    #[cfg(all(feature = "bigint", feature = "std"))]
     fn test_ratio_to_f64() {
         assert_eq!(0.5f64, Rational64::new(1, 2).to_f64().unwrap());
         assert_eq!(-0.5f64, Rational64::new(1, -2).to_f64().unwrap());
@@ -2551,6 +2567,15 @@ mod test {
                 .to_f64()
                 .unwrap(),
             0f64
-        )
+        );
+        assert_eq!(
+            BigRational::new(
+                "1234567890987654321234567890".parse().unwrap(),
+                "987654321234567890987654321".parse().unwrap()
+            )
+                .to_f64()
+                .unwrap(),
+            1.2499999893125f64
+        );
     }
 }
